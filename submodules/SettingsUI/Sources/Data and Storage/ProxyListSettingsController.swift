@@ -20,9 +20,10 @@ private final class ProxySettingsControllerArguments {
     let removeServer: (ProxyServerSettings) -> Void
     let setServerWithRevealedOptions: (ProxyServerSettings?, ProxyServerSettings?) -> Void
     let toggleUseForCalls: (Bool) -> Void
+    let toggleAutoSwitch: (Bool) -> Void
     let shareProxyList: () -> Void
     
-    init(toggleEnabled: @escaping (Bool) -> Void, addNewServer: @escaping () -> Void, activateServer: @escaping (ProxyServerSettings) -> Void, editServer: @escaping (ProxyServerSettings) -> Void, removeServer: @escaping (ProxyServerSettings) -> Void, setServerWithRevealedOptions: @escaping (ProxyServerSettings?, ProxyServerSettings?) -> Void, toggleUseForCalls: @escaping (Bool) -> Void, shareProxyList: @escaping () -> Void) {
+    init(toggleEnabled: @escaping (Bool) -> Void, addNewServer: @escaping () -> Void, activateServer: @escaping (ProxyServerSettings) -> Void, editServer: @escaping (ProxyServerSettings) -> Void, removeServer: @escaping (ProxyServerSettings) -> Void, setServerWithRevealedOptions: @escaping (ProxyServerSettings?, ProxyServerSettings?) -> Void, toggleUseForCalls: @escaping (Bool) -> Void, toggleAutoSwitch: @escaping (Bool) -> Void, shareProxyList: @escaping () -> Void) {
         self.toggleEnabled = toggleEnabled
         self.addNewServer = addNewServer
         self.activateServer = activateServer
@@ -30,6 +31,7 @@ private final class ProxySettingsControllerArguments {
         self.removeServer = removeServer
         self.setServerWithRevealedOptions = setServerWithRevealedOptions
         self.toggleUseForCalls = toggleUseForCalls
+        self.toggleAutoSwitch = toggleAutoSwitch
         self.shareProxyList = shareProxyList
     }
 }
@@ -61,6 +63,7 @@ private enum ProxySettingsControllerEntryId: Equatable, Hashable {
 public enum ProxySettingsEntryTag: ItemListItemTag, Equatable {
     case edit
     case useProxy
+    case autoSwitch
     case shareList
     case useForCalls
     
@@ -75,6 +78,8 @@ public enum ProxySettingsEntryTag: ItemListItemTag, Equatable {
 
 private enum ProxySettingsControllerEntry: ItemListNodeEntry {
     case enabled(PresentationTheme, String, Bool, Bool)
+    case autoSwitch(PresentationTheme, String, Bool)
+    case autoSwitchInfo(PresentationTheme, String)
     case serversHeader(PresentationTheme, String)
     case addServer(PresentationTheme, String, Bool)
     case server(Int, PresentationTheme, PresentationStrings, ProxyServerSettings, Bool, DisplayProxyServerStatus, ProxySettingsServerItemEditing, Bool)
@@ -85,6 +90,8 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
     var section: ItemListSectionId {
         switch self {
             case .enabled:
+                return ProxySettingsControllerSection.enabled.rawValue
+            case .autoSwitch, .autoSwitchInfo:
                 return ProxySettingsControllerSection.enabled.rawValue
             case .serversHeader, .addServer, .server:
                 return ProxySettingsControllerSection.servers.rawValue
@@ -99,6 +106,10 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
         switch self {
             case .enabled:
                 return .index(0)
+            case .autoSwitch:
+                return .index(6)
+            case .autoSwitchInfo:
+                return .index(7)
             case .serversHeader:
                 return .index(1)
             case .addServer:
@@ -118,6 +129,18 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
         switch lhs {
             case let .enabled(lhsTheme, lhsText, lhsValue, lhsCreatesNew):
                 if case let .enabled(rhsTheme, rhsText, rhsValue, rhsCreatesNew) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsValue == rhsValue, lhsCreatesNew == rhsCreatesNew {
+                    return true
+                } else {
+                    return false
+                }
+            case let .autoSwitch(lhsTheme, lhsText, lhsValue):
+                if case let .autoSwitch(rhsTheme, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsText == rhsText, lhsValue == rhsValue {
+                    return true
+                } else {
+                    return false
+                }
+            case let .autoSwitchInfo(lhsTheme, lhsText):
+                if case let .autoSwitchInfo(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText {
                     return true
                 } else {
                     return false
@@ -170,23 +193,37 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
                     default:
                         return true
                 }
+            case .autoSwitch:
+                switch rhs {
+                    case .enabled, .autoSwitch:
+                        return false
+                    default:
+                        return true
+                }
+            case .autoSwitchInfo:
+                switch rhs {
+                    case .enabled, .autoSwitch, .autoSwitchInfo:
+                        return false
+                    default:
+                        return true
+                }
             case .serversHeader:
                 switch rhs {
-                    case .enabled, .serversHeader:
+                    case .enabled, .autoSwitch, .autoSwitchInfo, .serversHeader:
                         return false
                     default:
                         return true
                 }
             case .addServer:
                 switch rhs {
-                    case .enabled, .serversHeader, .addServer:
+                    case .enabled, .autoSwitch, .autoSwitchInfo, .serversHeader, .addServer:
                         return false
                     default:
                         return true
                 }
             case let .server(lhsIndex, _, _, _, _, _, _, _):
                 switch rhs {
-                    case .enabled, .serversHeader, .addServer:
+                    case .enabled, .autoSwitch, .autoSwitchInfo, .serversHeader, .addServer:
                         return false
                     case let .server(rhsIndex, _, _, _, _, _, _, _):
                         return lhsIndex < rhsIndex
@@ -195,14 +232,14 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
                 }
             case .shareProxyList:
                 switch rhs {
-                    case .enabled, .serversHeader, .addServer, .server, .shareProxyList:
+                    case .enabled, .autoSwitch, .autoSwitchInfo, .serversHeader, .addServer, .server, .shareProxyList:
                         return false
                     default:
                         return true
             }
             case .useForCalls:
                 switch rhs {
-                    case .enabled, .serversHeader, .addServer, .server, .shareProxyList, .useForCalls:
+                    case .enabled, .autoSwitch, .autoSwitchInfo, .serversHeader, .addServer, .server, .shareProxyList, .useForCalls:
                         return false
                     default:
                         return true
@@ -223,6 +260,12 @@ private enum ProxySettingsControllerEntry: ItemListNodeEntry {
                         arguments.toggleEnabled(value)
                     }
                 }, tag: ProxySettingsEntryTag.useProxy)
+            case let .autoSwitch(_, text, value):
+                return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: text, value: value, enableInteractiveChanges: true, enabled: true, sectionId: self.section, style: .blocks, updated: { value in
+                    arguments.toggleAutoSwitch(value)
+                }, tag: ProxySettingsEntryTag.autoSwitch)
+            case let .autoSwitchInfo(_, text):
+                return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
             case let .serversHeader(_, text):
                 return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
             case let .addServer(_, text, _):
@@ -257,6 +300,8 @@ private func proxySettingsControllerEntries(theme: PresentationTheme, strings: P
     var entries: [ProxySettingsControllerEntry] = []
 
     entries.append(.enabled(theme, strings.ChatSettings_ConnectionType_UseProxy, proxySettings.enabled, proxySettings.servers.isEmpty))
+    entries.append(.autoSwitch(theme, "Auto-switch proxies", proxySettings.autoSwitch))
+    entries.append(.autoSwitchInfo(theme, "Automatically switches to another saved proxy if the current one has connection issues."))
     entries.append(.serversHeader(theme, strings.SocksProxySetup_SavedProxies))
     entries.append(.addServer(theme, strings.SocksProxySetup_AddProxy, state.editing))
     var index = 0
@@ -402,6 +447,12 @@ public func proxySettingsController(accountManager: AccountManager<TelegramAccou
         let _ = updateProxySettingsInteractively(accountManager: accountManager, { current in
             var current = current
             current.useForCalls = value
+            return current
+        }).start()
+    }, toggleAutoSwitch: { value in
+        let _ = updateProxySettingsInteractively(accountManager: accountManager, { current in
+            var current = current
+            current.autoSwitch = value
             return current
         }).start()
     }, shareProxyList: {

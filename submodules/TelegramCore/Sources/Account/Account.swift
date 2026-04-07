@@ -1483,13 +1483,15 @@ public class Account {
                 strongSelf._importantTasksRunning.set(value)
             }
         }))
-        self.managedOperationsDisposable.add((accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
-        |> map { sharedData -> ProxyServerSettings? in
-            if let settings = sharedData.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self) {
-                return settings.effectiveActiveServer
-            } else {
-                return nil
-            }
+        let proxySettingsSignal = accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
+        |> map { sharedData -> ProxySettings in
+            return sharedData.entries[SharedDataKeys.proxySettings]?.get(ProxySettings.self) ?? ProxySettings.defaultSettings
+        }
+        |> distinctUntilChanged
+
+        self.managedOperationsDisposable.add((proxySettingsSignal
+        |> map { settings -> ProxyServerSettings? in
+            return settings.effectiveActiveServer
         }
         |> distinctUntilChanged).start(next: { activeServer in
             let updated = activeServer.flatMap { activeServer -> MTSocksProxySettings? in
@@ -1509,6 +1511,72 @@ public class Account {
                 } else {
                     return nil
                 }
+            }
+        }))
+
+        var failedProxyServers = Set<ProxyServerSettings>()
+        var lastObservedActiveProxy: ProxyServerSettings?
+        var pendingAutomaticallyActivatedProxy: ProxyServerSettings?
+        var isManualProxySelectionInProgress = false
+        self.managedOperationsDisposable.add((combineLatest(queue: networkStateQueue, proxySettingsSignal, network.connectionStatus)).start(next: { proxySettings, connectionStatus in
+            let activeServer = proxySettings.effectiveActiveServer
+            if activeServer != lastObservedActiveProxy {
+                if activeServer == pendingAutomaticallyActivatedProxy {
+                    pendingAutomaticallyActivatedProxy = nil
+                } else {
+                    failedProxyServers.removeAll()
+                    pendingAutomaticallyActivatedProxy = nil
+                    isManualProxySelectionInProgress = activeServer != nil
+                }
+                lastObservedActiveProxy = activeServer
+            }
+
+            guard let activeServer else {
+                failedProxyServers.removeAll()
+                pendingAutomaticallyActivatedProxy = nil
+                isManualProxySelectionInProgress = false
+                return
+            }
+
+            switch connectionStatus {
+            case let .updating(proxyAddress), let .online(proxyAddress):
+                if proxyAddress == activeServer.host {
+                    failedProxyServers.removeAll()
+                    pendingAutomaticallyActivatedProxy = nil
+                    isManualProxySelectionInProgress = false
+                }
+            case let .connecting(proxyAddress, proxyHasConnectionIssues):
+                guard proxyHasConnectionIssues, proxyAddress == activeServer.host else {
+                    return
+                }
+                guard proxySettings.autoSwitch else {
+                    return
+                }
+                guard !isManualProxySelectionInProgress else {
+                    return
+                }
+                guard pendingAutomaticallyActivatedProxy == nil else {
+                    return
+                }
+
+                failedProxyServers.insert(activeServer)
+                guard let nextServer = proxySettings.servers.first(where: { server in
+                    return server != activeServer && !failedProxyServers.contains(server)
+                }) else {
+                    return
+                }
+
+                pendingAutomaticallyActivatedProxy = nextServer
+                let _ = updateProxySettingsInteractively(accountManager: accountManager, { current in
+                    guard current.enabled, current.activeServer == activeServer else {
+                        return current
+                    }
+                    var current = current
+                    current.activeServer = nextServer
+                    return current
+                }).start()
+            case .waitingForNetwork:
+                break
             }
         }))
 

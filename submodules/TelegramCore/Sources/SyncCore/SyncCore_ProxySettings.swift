@@ -76,16 +76,18 @@ public struct ProxySettings: Codable, Equatable {
     public var servers: [ProxyServerSettings]
     public var activeServer: ProxyServerSettings?
     public var useForCalls: Bool
+    public var autoSwitch: Bool
     
     public static var defaultSettings: ProxySettings {
-        return ProxySettings(enabled: false, servers: [], activeServer: nil, useForCalls: false)
+        return ProxySettings(enabled: false, servers: [], activeServer: nil, useForCalls: false, autoSwitch: true)
     }
     
-    public init(enabled: Bool, servers: [ProxyServerSettings], activeServer: ProxyServerSettings?, useForCalls: Bool) {
+    public init(enabled: Bool, servers: [ProxyServerSettings], activeServer: ProxyServerSettings?, useForCalls: Bool, autoSwitch: Bool) {
         self.enabled = enabled
         self.servers = servers
         self.activeServer = activeServer
         self.useForCalls = useForCalls
+        self.autoSwitch = autoSwitch
     }
     
     public init(from decoder: Decoder) throws {
@@ -95,6 +97,7 @@ public struct ProxySettings: Codable, Equatable {
         self.servers = try container.decode([ProxyServerSettings].self, forKey: "servers")
         self.activeServer = try container.decodeIfPresent(ProxyServerSettings.self, forKey: "activeServer")
         self.useForCalls = ((try? container.decode(Int32.self, forKey: "useForCalls")) ?? 0) != 0
+        self.autoSwitch = ((try? container.decode(Int32.self, forKey: "autoSwitch")) ?? 1) != 0
     }
     
     public func encode(to encoder: Encoder) throws {
@@ -104,6 +107,7 @@ public struct ProxySettings: Codable, Equatable {
         try container.encode(self.servers, forKey: "servers")
         try container.encodeIfPresent(self.activeServer, forKey: "activeServer")
         try container.encode((self.useForCalls ? 1 : 0) as Int32, forKey: "useForCalls")
+        try container.encode((self.autoSwitch ? 1 : 0) as Int32, forKey: "autoSwitch")
     }
     
     public var effectiveActiveServer: ProxyServerSettings? {

@@ -1558,7 +1558,7 @@ func peerInfoScreenData(
                         activeSessionsContext: nil,
                         webSessionsContext: nil,
                         otherSessionsCount: nil,
-                        proxySettings: ProxySettings(enabled: false, servers: [], activeServer: nil, useForCalls: false),
+                        proxySettings: ProxySettings(enabled: false, servers: [], activeServer: nil, useForCalls: false, autoSwitch: true),
                         notificationAuthorizationStatus: .notDetermined,
                         notificationWarningSuppressed: false,
                         notificationExceptions: nil,
