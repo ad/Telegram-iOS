@@ -170,31 +170,44 @@ def copy_profiles_from_directory(source_path, destination_path, team_id, bundle_
         '.BroadcastUpload': 'BroadcastUpload'
     }
 
+    expected_names = set(v + '.mobileprovision' for v in profile_name_mapping.values())
+    copied_any = False
+
     for file_name in os.listdir(source_path):
         file_path = source_path + '/' + file_name
         if os.path.isfile(file_path):
             if not file_path.endswith('.mobileprovision'):
                 continue
 
-            profile_data = run_executable_with_output('openssl', arguments=[
-                'smime',
-                '-inform',
-                'der',
-                '-verify',
-                '-noverify',
-                '-in',
-                file_path
-            ], decode=False, stderr_to_stdout=False, check_result=True)
+            try:
+                profile_data = run_executable_with_output('openssl', arguments=[
+                    'smime',
+                    '-inform',
+                    'der',
+                    '-verify',
+                    '-noverify',
+                    '-in',
+                    file_path
+                ], decode=False, stderr_to_stdout=False, check_result=True)
 
-            profile_dict = plistlib.loads(profile_data)
-            profile_name = profile_dict['Entitlements']['application-identifier']
+                profile_dict = plistlib.loads(profile_data)
+                profile_name = profile_dict['Entitlements']['application-identifier']
 
-            if profile_name.startswith(team_id + '.' + bundle_id):
-                profile_base_name = profile_name[len(team_id + '.' + bundle_id):]
-                if profile_base_name in profile_name_mapping:
-                    shutil.copyfile(file_path, destination_path + '/' + profile_name_mapping[profile_base_name] + '.mobileprovision')
-                else:
-                    print('Warning: skipping provisioning profile at {} with bundle_id {} (base_name {})'.format(file_path, profile_name, profile_base_name))
+                if profile_name.startswith(team_id + '.' + bundle_id):
+                    profile_base_name = profile_name[len(team_id + '.' + bundle_id):]
+                    if profile_base_name in profile_name_mapping:
+                        shutil.copyfile(file_path, destination_path + '/' + profile_name_mapping[profile_base_name] + '.mobileprovision')
+                        copied_any = True
+                    else:
+                        print('Warning: skipping provisioning profile at {} with bundle_id {} (base_name {})'.format(file_path, profile_name, profile_base_name))
+            except Exception:
+                pass
+
+    if not copied_any:
+        for file_name in os.listdir(source_path):
+            file_path = source_path + '/' + file_name
+            if os.path.isfile(file_path) and file_name in expected_names:
+                shutil.copyfile(file_path, destination_path + '/' + file_name)
 
 
 def resolve_aps_environment_from_directory(source_path, team_id, bundle_id):

@@ -60,6 +60,8 @@ python3 build-system/Make/Make.py \
 
 ## IPA
 
+### With distribution provisioning profiles
+
 1. Repeat the steps from the previous section. Use distribution provisioning profiles.
 2. Run:
 ```
@@ -71,6 +73,31 @@ python3 build-system/Make/Make.py \
     --buildNumber=100001 \
     --configuration=release_arm64
 ```
+
+### With fake-codesigning (for re-signing with AltStore, etc.)
+
+If you don't have distribution provisioning profiles and plan to re-sign the IPA later (e.g. with AltStore), you can build using the bundled `fake-codesigning` profiles:
+
+1. Import the fake signing certificate into your keychain:
+```
+security import build-system/fake-codesigning/certs/SelfSigned.p12 \
+    -k ~/Library/Keychains/login.keychain-db -P "" -T /usr/bin/codesign
+```
+2. The configuration in `build-system/template_minimal_development_configuration.json` must use the bundle ID and team ID that match the fake profiles (`ph.telegra.Telegraph` / `C67CF9S4VU`). This is already set up by default.
+3. Build the IPA:
+```
+python3 build-system/Make/Make.py \
+    --cacheDir="$HOME/telegram-bazel-cache" \
+    --overrideXcodeVersion \
+    build \
+    --configurationPath=build-system/template_minimal_development_configuration.json \
+    --codesigningInformationPath=build-system/fake-codesigning \
+    --buildNumber=100001 \
+    --configuration=release_arm64
+```
+4. The resulting IPA will be at `bazel-bin/Telegram/Telegram.ipa`.
+5. (Optional) Remove the fake certificate from your keychain after the build:
+   Open **Keychain Access**, find "Apple Distribution: Telegram FZ-LLC (C67CF9S4VU)" and delete it.
 
 # FAQ
 
